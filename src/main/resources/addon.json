@@ -1,0 +1,9 @@
+{
+  "name": "ChatUtils",
+  "uuid": "%uuid%",
+  "mainClass": "de.jan.chatutils.ChatUtils",
+  "transformerClass": "de.jan.chatutils.ChatUtilsTransformer",
+  "description": "Adds some things like copy chat messages and clear chat",
+  "author": "TheRealJan",
+  "icon": "https://i.imgur.com/IIScL09.png"
+}

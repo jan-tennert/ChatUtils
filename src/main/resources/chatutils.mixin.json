@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "de.jan.chatutils.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "refmap": "example.refmap.json",
+  "verbose": false,
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "client": [],
+  "mixins": []
+}
