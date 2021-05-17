@@ -1,26 +1,27 @@
 package de.jan.chatutils;
 
-import java.util.Arrays;
-import java.util.List;
-
 import net.labymod.api.LabyModAddon;
 import net.labymod.api.event.Subscribe;
 import net.labymod.api.event.events.client.TickEvent;
 import net.labymod.api.event.events.client.chat.MessageModifyEvent;
 import net.labymod.main.LabyMod;
-import net.labymod.settings.elements.BooleanElement;
+import net.labymod.settings.elements.*;
 import net.labymod.settings.elements.ControlElement.IconData;
-import net.labymod.settings.elements.KeyElement;
-import net.labymod.settings.elements.SettingsElement;
 import net.labymod.utils.Keyboard;
 import net.labymod.utils.Material;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.network.play.NetworkPlayerInfo;
-import net.minecraft.util.text.*;
 import net.minecraft.util.text.Color;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.StringTextComponent;
 import net.minecraft.util.text.TextComponent;
 import net.minecraft.util.text.event.ClickEvent;
 import net.minecraft.util.text.event.HoverEvent;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.List;
 
 public class ChatUtils extends LabyModAddon {
 
@@ -28,6 +29,8 @@ public class ChatUtils extends LabyModAddon {
     private boolean extraButton;
     private boolean removePlayer;
     private int clearChatKey;
+    private boolean displayTimestamp;
+    private String timestampPattern;
 
     @Override
     public void onEnable() {
@@ -40,14 +43,24 @@ public class ChatUtils extends LabyModAddon {
         extraButton = (getConfig().has("extraButton")) ? getConfig().get("extraButton").getAsBoolean() : true;
         removePlayer = (getConfig().has("removePlayer")) ? getConfig().get("removePlayer").getAsBoolean() : true;
         clearChatKey = (getConfig().has("clearChatKey")) ? getConfig().get("clearChatKey").getAsInt() : 52;
+        displayTimestamp = (getConfig().has("displayTimestamp")) ? getConfig().get("displayTimestamp").getAsBoolean() : false;
+        timestampPattern = (getConfig().has("timestampPattern")) ? getConfig().get("timestampPattern").getAsString() : "HH:mm:ss";
     }
 
     @Override
     protected void fillSettings(List<SettingsElement> list) {
         list.add(new BooleanElement("Enabled", this, new IconData(Material.REDSTONE), "enabled", this.enabled));
+        list.add(new HeaderElement("Copy Messages"));
         list.add(new BooleanElement("Copy Button", this, new IconData(Material.GREEN_DYE), "extraButton", this.extraButton));
-        BooleanElement removePlayerC = new BooleanElement("Remove Player from Clipboard", this, new IconData(Material.PLAYER_HEAD), "removePlayer", this.removePlayer);
-        list.add(removePlayerC);
+        list.add(new BooleanElement("Remove Player from Clipboard", this, new IconData(Material.PLAYER_HEAD), "removePlayer", this.removePlayer));
+        list.add(new HeaderElement("Timestamp"));
+        list.add(new BooleanElement("Display Timestamp", this, new IconData(Material.CLOCK), "displayTimestamp", this.displayTimestamp));
+
+        StringElement pattern = new StringElement("Timestamp Pattern", this, new IconData(Material.SIGN), "timestampPattern", this.timestampPattern);
+        pattern.setDescriptionText("HH = hour\nmm = minute\nss = second\nSSS = fraction of second");
+        list.add(pattern);
+
+        list.add(new HeaderElement("Misc"));
         list.add(new KeyElement("Clear Chat Key", this, null, "clearChatKey", this.clearChatKey));
     }
 
@@ -67,29 +80,19 @@ public class ChatUtils extends LabyModAddon {
         if (e.getComponent().getString().equals("\n")) return;
         if (Minecraft.getInstance().player != null && LabyMod.getInstance().isInGame()) {
             if (enabled) {
-                String author = null;
-                if (Minecraft.getInstance().isIntegratedServerRunning() && removePlayer) {
-                    for (String player : Minecraft.getInstance().getIntegratedServer().getOnlinePlayerNames()) {
-                        if (e.getComponent().getString().contains(player)) {
-                            author = player;
-                        }
-                    }
-                } else if (Minecraft.getInstance().getConnection() != null && removePlayer) {
-                    for (NetworkPlayerInfo player : Minecraft.getInstance().getConnection().getPlayerInfoMap()) {
-                        if (player.getDisplayName() != null && e.getComponent().getString().contains(player.getDisplayName().getString())) {
-                            author = player.getDisplayName().getString();
-                        }
-                    }
+                String time = null;
+                if (displayTimestamp) {
+                    time = addTimestamp(e);
                 }
-
-
+                String author = removeNames(e.getComponent());
                 if (extraButton) {
-                    e.getComponent().getSiblings().add(generateCopyButton(e.getComponent(), author));
+                    e.getComponent().getSiblings().add(generateCopyButton(e.getComponent(), author, "[" + time + "]"));
                 } else {
                     ITextComponent c = e.getComponent();
                     TextComponent t = (TextComponent) c;
                     String toCopy = t.getString();
                     if (author != null) toCopy = toCopy.replace(author, "");
+                    if (time != null) toCopy = toCopy.replace("[" + time + "]", "");
                     t.setStyle(t.getStyle()
                             .setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new StringTextComponent(getCopyText())))
                             .setClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, toCopy)));
@@ -98,14 +101,53 @@ public class ChatUtils extends LabyModAddon {
         }
     }
 
-    private TextComponent generateCopyButton(ITextComponent msg, String author) {
+    private String addTimestamp(MessageModifyEvent e) {
+        LocalDateTime time = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(timestampPattern);
+        try {
+            String formattedDate = time.format(formatter);
+            StringTextComponent text = new StringTextComponent(String.format("[%s] ", formattedDate));
+            text.getSiblings().add(e.getComponent());
+            text.getSiblings().addAll(e.getComponent().getSiblings());
+            e.setComponent(text);
+            return formattedDate;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String removeNames(ITextComponent c) {
+        String author = null;
+        if (Minecraft.getInstance().isIntegratedServerRunning() && removePlayer) {
+            for (String player : Minecraft.getInstance().getIntegratedServer().getOnlinePlayerNames()) {
+                if (c.getString().contains(player)) {
+                    author = player;
+                    break;
+                }
+            }
+        } else if (Minecraft.getInstance().getConnection() != null && removePlayer) {
+            for (NetworkPlayerInfo player : Minecraft.getInstance().getConnection().getPlayerInfoMap()) {
+                if (player.getDisplayName() != null && c.getString().contains(player.getDisplayName().getString())) {
+                    author = player.getDisplayName().getString();
+                    break;
+                }
+            }
+        }
+        return author;
+    }
+
+    private TextComponent generateCopyButton(ITextComponent msg, String... remove) {
         StringTextComponent init = new StringTextComponent(" ");
         StringTextComponent b1 = new StringTextComponent("[");
         b1.setStyle(b1.getStyle().setColor(Color.fromHex("#ffffff")));
         StringTextComponent copy = new StringTextComponent(getCopyName());
         HoverEvent event = new HoverEvent(HoverEvent.Action.SHOW_TEXT, new StringTextComponent(getCopyText()));
         String toCopy = msg.getString();
-        if (author != null) toCopy = toCopy.replace(author, "");
+        for (String s : remove) {
+            if(s != null) {
+                toCopy = toCopy.replace(s, "");
+            }
+        }
         copy.setStyle(copy.getStyle().setColor(Color.fromHex("#00f53d"))
                 .setHoverEvent(event)
                 .setClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, toCopy)));

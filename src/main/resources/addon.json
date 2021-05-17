@@ -3,7 +3,7 @@
   "uuid": "%uuid%",
   "mainClass": "de.jan.chatutils.ChatUtils",
   "transformerClass": "de.jan.chatutils.ChatUtilsTransformer",
-  "description": "Adds some things like copy chat messages and clear chat",
+  "description": "Adds some things like copy chat messages, clear chat and chat timestamp",
   "author": "TheRealJan",
   "icon": "https://i.imgur.com/IIScL09.png"
 }
